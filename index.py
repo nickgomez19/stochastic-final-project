@@ -5,6 +5,7 @@ from string import digits
 from itertools import groupby
 import dask.dataframe as dd
 
+
 def load_reference_ds():
     reference = pd.read_csv('data/reference.csv')
     reference = reference.rename(columns={'city mpg': 'City MPG', 'highway MPG': 'Highway MPG'})
@@ -19,6 +20,7 @@ def load_reference_ds():
 
     return reference
 
+
 def load_sales_ds():
     sales1 = pd.read_csv('data/carsales1.csv', error_bad_lines=False)
     print("SALES HEAD")
@@ -27,17 +29,21 @@ def load_sales_ds():
     sales1.info(memory_usage='deep')
     return sales1
 
+
 def camel_case_split(identifier):
     matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', identifier)
     return [m.group(0) for m in matches]
+
 
 def removeDigits(str):
     remove_digits = str.maketrans('', '', digits)
     res = str.translate(remove_digits)
     return res
 
+
 def splitByInts(s):
     return [''.join(g) for _, g in groupby(s, str.isalpha)]
+
 
 def pickModel(str):
     first_camel = camel_case_split(str)[0]
@@ -50,23 +56,28 @@ def pickModel(str):
 
     return model
 
+
 def pickHighest(df, col, model):
     counts = df[col].value_counts()
     value = counts.sort_values(ascending=True).index[0]
     return value
 
+
 def pickAvg(df, col, model):
     return sum(df[col]) / len(df[col])
+
 
 def iterate(dic, df, labels, picking_function, model):
     for label in labels:
         dic[label] = picking_function(df, label, model)
     return dic
 
+
 def generate_bool(rf, row, model):
     bool_filter = (rf['Model'].str.contains(model)) & (rf['Make'] == row['Make']) & (
         rf['Year'] == np.int64(row['Year']))
     return bool_filter
+
 
 def findAttr(attrMap, model):
     res = False 
@@ -76,12 +87,12 @@ def findAttr(attrMap, model):
     return res
 
 
-
 model2style = {'2dr':'Coupe', '4dr':'Sedan', 'Coupe':'Coupe', 'Sedan':'Sedan', 'Hatch': 'Hatchback'}
 model2size = {} # no good, common way to pan model names to a specific size
 
 multi_val_cols = ['Vehicle Style', 'Vehicle Size']
 avg_cols = ['MSRP', 'City MPG', 'Engine HP', 'Highway MPG', 'Popularity']
+
 
 def getMeta():
     meta = {}
@@ -89,6 +100,7 @@ def getMeta():
         meta[label] = "str"
     for label in avg_cols + ['Total Depreciation', 'Age', 'Avg MPG', 'Avg Depreciation Per Year']:
         meta[label] = "float"
+
 
 def applicble(row):
     model = pickModel(row['Model'])
@@ -123,7 +135,6 @@ def applicble(row):
     iterate(res, filtr, multi_val_cols, pickHighest, row['Model'])
     iterate(res, filtr, avg_cols, pickAvg, row['Model'])
 
-
     res['Total Depreciation'] = res['MSRP'] - row['Price']
     res['Age'] = (2017 - (row['Year']-1))
     res['Avg MPG'] = (res['City MPG'] + res['Highway MPG']) / 2
@@ -148,11 +159,6 @@ def merge(reference, target):
     matched = matched[matched['Matched']]
     matched = matched.drop('Matched', 1)
 
-    # trimmed_df = iterable[matched]
-
-    # print(added_fields_df.head())
-    # print(trimmed_df.head())
-
     result_df = trimmed_df.join(matched)
     print("NUMBER OF MATCHES")
     print(len(result_df.index))
@@ -169,6 +175,3 @@ if __name__ == "__main__":
     sales = load_sales_ds()
     reference = load_reference_ds()
     merge(reference, sales)
-
-#df frame operations
-#
