@@ -21,8 +21,6 @@ def load_reference_ds():
 
 def load_sales_ds():
     sales1 = pd.read_csv('data/carsales1.csv', error_bad_lines=False)
-    # sales1['Model'] = sales1['Model'].str.replace("\\","\\")
-    # sales1.drop([1084357])
     print("SALES HEAD")
     print(sales1.head())
 
@@ -55,12 +53,6 @@ def pickModel(str):
 def pickHighest(df, col, model):
     counts = df[col].value_counts()
     value = counts.sort_values(ascending=True).index[0]
-    # if len(counts) > 1:
-    #     print("-------------------------------------------------------------------------MULTIPLE OF THESE VALUES")
-    #     print("Model: "  + model)
-    #     print("Col: " + col)
-    #     print("Counts: ")
-    #     print(counts)
     return value
 
 def pickAvg(df, col, model):
@@ -83,67 +75,50 @@ def findAttr(attrMap, model):
             res = attrMap[attr]
     return res
 
+
+
 model2style = {'2dr':'Coupe', '4dr':'Sedan', 'Coupe':'Coupe', 'Sedan':'Sedan', 'Hatch': 'Hatchback'}
 model2size = {} # no good, common way to pan model names to a specific size
-meta = {}
+
 multi_val_cols = ['Vehicle Style', 'Vehicle Size']
 avg_cols = ['MSRP', 'City MPG', 'Engine HP', 'Highway MPG', 'Popularity']
-for label in ["Matched"] + multi_val_cols:
-    meta[label] = "str"
-for label in avg_cols+['Total Depreciation', 'Age', 'Avg MPG', 'Avg Depreciation Per Year']:
-    meta[label] = "float"
-# print("META INFORMATION FOR ROW")
-# dtypes=[''string', 'string', 'float', 'float','float','float','float']
+
+def getMeta():
+    meta = {}
+    for label in ["Matched"] + multi_val_cols:
+        meta[label] = "str"
+    for label in avg_cols + ['Total Depreciation', 'Age', 'Avg MPG', 'Avg Depreciation Per Year']:
+        meta[label] = "float"
+
 def applicble(row):
-    # print("---------------")
-    index= row.name
     model = pickModel(row['Model'])
     filtr = reference[generate_bool(reference, row, model)]
 
     size, style = findAttr(model2size, row['Model']), findAttr(model2style, row['Model'])
-    if(size):
+
+    if size:
         size_cond = filtr['Vehicle Size'].str.contains(str(size))
     else:
         size_cond = np.ones((len(filtr.index)), dtype=bool)
-    if(style):
+
+    if style:
         style_cond = filtr['Vehicle Style'].str.contains(str(style))
     else:
         style_cond = np.ones((len(filtr.index)), dtype=bool)
     
     filtr = filtr[size_cond & style_cond]
 
-    # print("*****matched style: " + str(style))
-    # print("before--")
-    # print(filtr[['Vehicle Style']])
-
-
-    # print("after--")
-    # print(filtr[['Vehicle Style']])
-
-    # print("style boolean--")
-    # print(style_cond)
-
-    # print("boolean")
-    # print(str(not style))
     res = {}
 
     res['Matched'] = (len(filtr.index) != 0)
+
     if not res['Matched']:
+        # creating a dummy Series to fit expected structure
         for label in multi_val_cols:
             res[label] = "str"
         for label in avg_cols+['Total Depreciation', 'Age', 'Avg MPG', 'Avg Depreciation Per Year']:
             res[label] = 1.01
-        
-        res = pd.Series(res)
-        # print("fake result")
-        # print(res.dtypes)
-        return res
-
-    # print("filtr")
-    # print(filtr.head())
-    # print(row)
-
-    
+        return pd.Series(res)
 
     iterate(res, filtr, multi_val_cols, pickHighest, row['Model'])
     iterate(res, filtr, avg_cols, pickAvg, row['Model'])
@@ -159,29 +134,15 @@ def applicble(row):
         res['Avg Depreciation Per Year'] = res['Total Depreciation']
 
     res = pd.Series(res)
-    # print("actual result")
-    # print(res.dtypes)
     return res
-
-        # new_s = pd.Series(new_dict)
-        # combined_s = new_s.append(row)
-        # result_df = result_df.append(combined_s, ignore_index=True)
 
 def merge(reference, target):
     iterable = target[0:1084000]
-    no_match = 0
-    result__added_fields_df = pd.DataFrame()
-    dict_added_fileds = {}
-    print("merge")
 
     # matched = iterable.apply(lambda rw: applicble(rw), axis=1)
 
     dd_iterable = dd.from_pandas(iterable, npartitions=7)
-    matched = dd_iterable.map_partitions(lambda df: df.apply(lambda rw: applicble(rw), axis=1), meta=meta).compute(scheduler='processes')  
-    # matched.compute()
-
-    # added_fields_df = pd.DataFrame.from_dict(dict_added_fileds, "index")
-    # print(added_fields_df.head())
+    matched = dd_iterable.map_partitions(lambda df: df.apply(lambda rw: applicble(rw), axis=1), meta=getMeta()).compute(scheduler='processes')
 
     trimmed_df = iterable[matched['Matched']]
     matched = matched[matched['Matched']]
